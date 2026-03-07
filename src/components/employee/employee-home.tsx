@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useFcmRegistration } from "@/hooks/use-fcm-registration";
 import { MetricCard } from "@/components/shared/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransactionCard, type TransactionView } from "@/components/transactions/transaction-card";
@@ -21,8 +20,7 @@ type DashboardPayload = {
 
 export function EmployeeHome({ currency }: { currency: string }) {
   const [data, setData] = useState<DashboardPayload | null>(null);
-
-  useFcmRegistration(true);
+  const monthShort = new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date()).toUpperCase();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,15 +45,15 @@ export function EmployeeHome({ currency }: { currency: string }) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard label="Current Balance" value={formatCurrency(data?.balance ?? 0, currency)} />
         <MetricCard
-          label="Petty Cash This Month"
+          label={`Admin Added (${monthShort})`}
           value={formatCurrency(data?.monthTotals.pettyCash ?? 0, currency)}
         />
         <MetricCard
-          label="Cash In Hand This Month"
+          label={`You Added (${monthShort})`}
           value={formatCurrency(data?.monthTotals.cashInHand ?? 0, currency)}
         />
         <MetricCard
-          label="Expense This Month"
+          label={`Expense (${monthShort})`}
           value={formatCurrency(data?.monthTotals.expense ?? 0, currency)}
         />
       </div>

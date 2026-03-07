@@ -205,8 +205,12 @@ export function TransactionDetail({
 
           <BillUploader
             transactionId={transactionId}
+            hasImage={Boolean(tx.billImageUrl)}
             onUploaded={(url) => {
               setTx((prev) => (prev ? { ...prev, billImageUrl: url } : prev));
+            }}
+            onRemoved={() => {
+              setTx((prev) => (prev ? { ...prev, billImageUrl: null } : prev));
             }}
           />
         </CardContent>

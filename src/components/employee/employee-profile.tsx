@@ -7,6 +7,7 @@ import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LogoutButton } from "@/components/shared/logout-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -287,6 +288,10 @@ export function EmployeeProfile({
 
   return (
     <div className="grid max-w-4xl gap-6">
+      <div className="flex items-center justify-end gap-2">
+        <LogoutButton />
+      </div>
+
       <Card className="border-white/70 bg-white/90">
         <CardContent className="pt-6">
           <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">

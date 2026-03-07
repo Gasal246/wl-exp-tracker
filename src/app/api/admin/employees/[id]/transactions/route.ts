@@ -2,8 +2,8 @@ import { isValidObjectId } from "mongoose";
 import { z } from "zod";
 
 import { buildCursorFilter, encodeCursor } from "@/lib/pagination";
+import { createNotificationAndSendFcm } from "@/lib/notification";
 import { connectToDatabase } from "@/lib/db";
-import { firebaseMessaging } from "@/lib/firebase-admin";
 import { requireSession } from "@/lib/session";
 import { mapTransactionResponse, resolveTransactionAmounts } from "@/lib/transaction";
 import { Transaction } from "@/models/Transaction";
@@ -202,24 +202,33 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     transactionAt: parsed.data.transactionAt ? new Date(parsed.data.transactionAt) : new Date(),
   });
 
-  if (parsed.data.type === "credit") {
-    try {
-      if (employee.fcmTokens?.length) {
-        await firebaseMessaging().sendEachForMulticast({
-          tokens: employee.fcmTokens,
-          notification: {
-            title: "Petty Cash Updated",
-            body: `${amounts.employeeCurrency} ${amounts.employeeAmount.toFixed(2)} credited to your account`,
-          },
-          data: {
-            type: "petty_cash_credit",
-            transactionId: tx._id.toString(),
-          },
-        });
-      }
-    } catch {
-      // notification failures should not block transaction creation
-    }
+  try {
+    await createNotificationAndSendFcm({
+      recipient: {
+        id: employee._id.toString(),
+        role: "EMPLOYEE",
+        fcmTokens: employee.fcmTokens ?? [],
+      },
+      actor: {
+        id: sessionResult.session!.user.id,
+        role: "ADMIN",
+        name: sessionResult.session!.user.name ?? "Admin",
+        email: sessionResult.session!.user.email ?? "",
+        avatarUrl: sessionResult.session!.user.avatarUrl ?? null,
+      },
+      eventType: "TRANSACTION_ADDED",
+      transaction: {
+        id: tx._id.toString(),
+        description: tx.description,
+        type: tx.type,
+        amountAdmin: tx.amountAdmin,
+        amountEmployee: tx.amountEmployee,
+        adminCurrency: tx.adminCurrency,
+        employeeCurrency: tx.employeeCurrency,
+      },
+    });
+  } catch {
+    // Notification persistence must not block transaction creation.
   }
 
   return Response.json({ transaction: mapTransactionResponse(tx.toObject()) }, { status: 201 });

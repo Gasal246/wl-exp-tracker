@@ -2,6 +2,8 @@ import { isValidObjectId } from "mongoose";
 import { z } from "zod";
 
 import { connectToDatabase } from "@/lib/db";
+import { firebaseBucket } from "@/lib/firebase-admin";
+import { createNotificationAndSendFcm } from "@/lib/notification";
 import { requireSession } from "@/lib/session";
 import { mapTransactionResponse } from "@/lib/transaction";
 import { Transaction } from "@/models/Transaction";
@@ -84,6 +86,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       billImageUrl: parsed.data.billImageUrl,
       billStoragePath: parsed.data.billStoragePath,
     };
+    const previousBillImageUrl = tx.billImageUrl ?? null;
+    const previousBillStoragePath = tx.billStoragePath ?? null;
+    const billFieldsUpdated = allowedFields.billImageUrl !== undefined || allowedFields.billStoragePath !== undefined;
 
     if (allowedFields.billImageUrl !== undefined) {
       tx.billImageUrl = allowedFields.billImageUrl;
@@ -92,9 +97,65 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       tx.billStoragePath = allowedFields.billStoragePath;
     }
 
+    const nextBillStoragePath = tx.billStoragePath ?? null;
+    if (billFieldsUpdated && previousBillStoragePath && previousBillStoragePath !== nextBillStoragePath) {
+      try {
+        await firebaseBucket().file(previousBillStoragePath).delete({ ignoreNotFound: true });
+      } catch {
+        return Response.json({ error: "Failed to remove previous bill image from storage" }, { status: 500 });
+      }
+    }
+
     await tx.save();
+
+    const billWasAdded =
+      billFieldsUpdated && Boolean(tx.billImageUrl) && (tx.billImageUrl ?? null) !== previousBillImageUrl;
+
+    if (billWasAdded) {
+      const admin = await User.findOne({ _id: tx.adminId, isAdmin: true, isActive: true }).lean();
+      if (admin) {
+        try {
+          await createNotificationAndSendFcm({
+            recipient: {
+              id: admin._id.toString(),
+              role: "ADMIN",
+              fcmTokens: admin.fcmTokens ?? [],
+            },
+            actor: {
+              id: employee._id.toString(),
+              role: "EMPLOYEE",
+              name: employee.name,
+              email: employee.email,
+              avatarUrl: employee.avatarUrl ?? null,
+            },
+            eventType: "BILL_ADDED",
+            transaction: {
+              id: tx._id.toString(),
+              description: tx.description,
+              type: tx.type,
+              amountAdmin: tx.amountAdmin,
+              amountEmployee: tx.amountEmployee,
+              adminCurrency: tx.adminCurrency,
+              employeeCurrency: tx.employeeCurrency,
+            },
+          });
+        } catch {
+          // Notification persistence must not block bill updates.
+        }
+      }
+    }
+
     return Response.json({ transaction: mapTransactionResponse(tx.toObject()) });
   }
+
+  const employee = await User.findOne({ _id: tx.employeeId, isAdmin: false, isActive: true }).lean();
+  if (!employee) {
+    return Response.json({ error: "Employee not found" }, { status: 404 });
+  }
+
+  const previousBillImageUrl = tx.billImageUrl ?? null;
+  const previousBillStoragePath = tx.billStoragePath ?? null;
+  const billFieldsUpdated = parsed.data.billImageUrl !== undefined || parsed.data.billStoragePath !== undefined;
 
   if (parsed.data.description !== undefined) tx.description = parsed.data.description;
   if (parsed.data.type !== undefined) tx.type = parsed.data.type;
@@ -108,7 +169,49 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (parsed.data.billImageUrl !== undefined) tx.billImageUrl = parsed.data.billImageUrl;
   if (parsed.data.billStoragePath !== undefined) tx.billStoragePath = parsed.data.billStoragePath;
 
+  const nextBillStoragePath = tx.billStoragePath ?? null;
+  if (billFieldsUpdated && previousBillStoragePath && previousBillStoragePath !== nextBillStoragePath) {
+    try {
+      await firebaseBucket().file(previousBillStoragePath).delete({ ignoreNotFound: true });
+    } catch {
+      return Response.json({ error: "Failed to remove previous bill image from storage" }, { status: 500 });
+    }
+  }
+
   await tx.save();
+
+  const billWasAdded =
+    billFieldsUpdated && Boolean(tx.billImageUrl) && (tx.billImageUrl ?? null) !== previousBillImageUrl;
+  if (billWasAdded) {
+    try {
+      await createNotificationAndSendFcm({
+        recipient: {
+          id: employee._id.toString(),
+          role: "EMPLOYEE",
+          fcmTokens: employee.fcmTokens ?? [],
+        },
+        actor: {
+          id: sessionResult.session!.user.id,
+          role: "ADMIN",
+          name: sessionResult.session!.user.name ?? "Admin",
+          email: sessionResult.session!.user.email ?? "",
+          avatarUrl: sessionResult.session!.user.avatarUrl ?? null,
+        },
+        eventType: "BILL_ADDED",
+        transaction: {
+          id: tx._id.toString(),
+          description: tx.description,
+          type: tx.type,
+          amountAdmin: tx.amountAdmin,
+          amountEmployee: tx.amountEmployee,
+          adminCurrency: tx.adminCurrency,
+          employeeCurrency: tx.employeeCurrency,
+        },
+      });
+    } catch {
+      // Notification persistence must not block bill updates.
+    }
+  }
 
   return Response.json({ transaction: mapTransactionResponse(tx.toObject()) });
 }

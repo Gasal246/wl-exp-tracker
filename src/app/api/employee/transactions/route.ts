@@ -3,14 +3,18 @@ import { Types } from "mongoose";
 
 import { buildCursorFilter, encodeCursor } from "@/lib/pagination";
 import { connectToDatabase } from "@/lib/db";
+import { createNotificationAndSendFcm } from "@/lib/notification";
 import { requireSession } from "@/lib/session";
 import { mapTransactionResponse, resolveTransactionAmounts } from "@/lib/transaction";
 import { Transaction } from "@/models/Transaction";
+import { User } from "@/models/User";
 
 const createTransactionSchema = z.object({
   description: z.string().trim().min(2).max(500),
   amount: z.coerce.number().positive(),
   type: z.enum(["credit", "debit"]).default("debit"),
+  billImageUrl: z.string().url().optional(),
+  billStoragePath: z.string().optional(),
   transactionAt: z.string().optional(),
 });
 
@@ -148,12 +152,26 @@ export async function POST(request: Request) {
 
   await connectToDatabase();
 
+  const employee = await User.findOne({
+    _id: sessionResult.session!.user.id,
+    isAdmin: false,
+    isActive: true,
+  }).lean();
+  if (!employee) {
+    return Response.json({ error: "Employee not found" }, { status: 404 });
+  }
+
   const amounts = await resolveTransactionAmounts({
     employeeId: sessionResult.session!.user.id,
     amount: parsed.data.amount,
     actorRole: "EMPLOYEE",
     actorCurrency: sessionResult.session!.user.currency,
   });
+
+  const admin = await User.findOne({ _id: amounts.adminId, isAdmin: true, isActive: true }).lean();
+  if (!admin) {
+    return Response.json({ error: "Admin not found" }, { status: 404 });
+  }
 
   const tx = await Transaction.create({
     employeeId: sessionResult.session!.user.id,
@@ -162,6 +180,8 @@ export async function POST(request: Request) {
     createdByRole: "EMPLOYEE",
     type: parsed.data.type,
     creditSource: parsed.data.type === "credit" ? "CASH_IN_HAND" : null,
+    billImageUrl: parsed.data.type === "debit" ? (parsed.data.billImageUrl ?? null) : null,
+    billStoragePath: parsed.data.type === "debit" ? (parsed.data.billStoragePath ?? null) : null,
     description: parsed.data.description,
     amountEmployee: amounts.employeeAmount,
     amountAdmin: amounts.adminAmount,
@@ -170,6 +190,35 @@ export async function POST(request: Request) {
     exchangeRate: amounts.rate,
     transactionAt: parsed.data.transactionAt ? new Date(parsed.data.transactionAt) : new Date(),
   });
+
+  try {
+    await createNotificationAndSendFcm({
+      recipient: {
+        id: admin._id.toString(),
+        role: "ADMIN",
+        fcmTokens: admin.fcmTokens ?? [],
+      },
+      actor: {
+        id: employee._id.toString(),
+        role: "EMPLOYEE",
+        name: employee.name,
+        email: employee.email,
+        avatarUrl: employee.avatarUrl ?? null,
+      },
+      eventType: "TRANSACTION_ADDED",
+      transaction: {
+        id: tx._id.toString(),
+        description: tx.description,
+        type: tx.type,
+        amountAdmin: tx.amountAdmin,
+        amountEmployee: tx.amountEmployee,
+        adminCurrency: tx.adminCurrency,
+        employeeCurrency: tx.employeeCurrency,
+      },
+    });
+  } catch {
+    // Notification persistence must not block transaction creation.
+  }
 
   return Response.json({ transaction: mapTransactionResponse(tx.toObject()) }, { status: 201 });
 }

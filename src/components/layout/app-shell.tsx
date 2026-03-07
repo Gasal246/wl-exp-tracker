@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { LiveBalanceContext } from "@/components/layout/live-balance-context";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { LogoutButton } from "@/components/shared/logout-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFcmRegistration } from "@/hooks/use-fcm-registration";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -149,6 +151,8 @@ export function AppShell({
     };
   }, [applyDelta, balanceCurrency, setBalance]);
 
+  useFcmRegistration(roleLabel === "ADMIN" || roleLabel === "EMPLOYEE");
+
   return (
     <LiveBalanceContext.Provider value={liveBalanceContextValue}>
       <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.15),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.12),transparent_40%),#f8fafc]">
@@ -181,7 +185,7 @@ export function AppShell({
           </aside>
 
           <div className={cn("flex min-w-0 flex-1 flex-col", mobileBottomNav && "pb-20 lg:pb-0")}>
-            <header className="sticky top-0 z-20 border-b border-white/60 bg-white/80 px-4 py-3 backdrop-blur lg:px-6">
+            <header className="sticky top-0 z-20 border-b border-slate-200/90 bg-white/80 px-4 py-3 backdrop-blur lg:px-6">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2 lg:hidden">
                   {roleLabel !== "EMPLOYEE" && (
@@ -217,8 +221,13 @@ export function AppShell({
                   )}
                   {roleLabel === "EMPLOYEE" ? (
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">Expense Tracker</p>
-                      <p className="truncate text-xs text-slate-600">{currentName}</p>
+                      <p className="truncate text-sm font-bold text-slate-900 uppercase tracking-wider">Expense Tracker</p>
+                      {currentBalanceLabel && (
+                        <Badge className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-semibold">
+                          <Wallet className="size-3.5" />
+                          <span className="font-bold">{currentBalanceLabel}</span>
+                        </Badge>
+                      )}
                     </div>
                   ) : (
                     <Badge
@@ -234,7 +243,6 @@ export function AppShell({
                   {roleLabel === "EMPLOYEE" ? (
                     <div className="min-w-0">
                       <p className="truncate text-base font-semibold text-slate-900">Expense Tracker</p>
-                      <p className="truncate text-xs text-slate-600">{currentName}</p>
                     </div>
                   ) : (
                     <Badge variant="secondary" className="max-w-[280px] truncate">
@@ -255,14 +263,17 @@ export function AppShell({
                 </div>
 
                 <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+                  {(roleLabel === "ADMIN" || roleLabel === "EMPLOYEE") && (
+                    <NotificationBell role={roleLabel === "ADMIN" ? "ADMIN" : "EMPLOYEE"} />
+                  )}
                   {roleLabel === "ADMIN" || roleLabel === "EMPLOYEE" ? (
                     <Link
                       href={roleLabel === "ADMIN" ? "/admin/profile" : "/employee/profile"}
                       className="flex items-center gap-2 rounded-lg px-1 py-1 transition hover:bg-slate-100"
                     >
-                      <div className="hidden text-right sm:block">
-                        <p className="text-sm font-medium leading-none">{currentName}</p>
-                        <p className="text-xs text-muted-foreground">{currentEmail}</p>
+                      <div className={cn("min-w-0 text-right", roleLabel === "EMPLOYEE" ? "block" : "hidden sm:block")}>
+                        <p className="truncate text-sm font-medium leading-none">{currentName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{currentEmail}</p>
                       </div>
                       <Avatar>
                         <AvatarImage src={currentAvatarUrl ?? undefined} alt={currentName} />
@@ -281,10 +292,10 @@ export function AppShell({
                       </Avatar>
                     </>
                   )}
-                  <LogoutButton compact />
+                  {roleLabel !== "EMPLOYEE" ? <LogoutButton compact /> : null}
                 </div>
               </div>
-              {currentBalanceLabel && (
+              {currentBalanceLabel && roleLabel !== "EMPLOYEE" && (
                 <div className="mt-2 flex lg:hidden">
                   <Badge className="inline-flex items-center gap-1.5 text-xs font-semibold">
                     <Wallet className="size-3.5" />
