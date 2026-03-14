@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { BILL_UPLOAD_TARGET_BYTES, formatBytes } from "@/lib/bill-upload";
+import { uploadBillImage } from "@/lib/bill-upload-client";
 import type { TransactionView } from "@/components/transactions/transaction-card";
 
 type CreateTransactionResponse = {
@@ -68,32 +70,9 @@ export function TransactionForm({
       let billStoragePath: string | undefined;
 
       if (allowBillUpload && type === "debit" && billFile) {
-        if (!billFile.type.startsWith("image/")) {
-          throw new Error("Bill must be an image file");
-        }
-        if (billFile.size > 1024 * 1024) {
-          throw new Error("Bill image must be below 1 MB");
-        }
-
-        const formData = new FormData();
-        formData.append("file", billFile);
-
-        const uploadResponse = await fetch("/api/uploads/bill", {
-          method: "POST",
-          body: formData,
-        });
-        const uploadPayload = (await uploadResponse.json()) as {
-          url?: string;
-          storagePath?: string;
-          error?: string;
-        };
-
-        if (!uploadResponse.ok || !uploadPayload.url || !uploadPayload.storagePath) {
-          throw new Error(uploadPayload.error || "Failed to upload bill image");
-        }
-
-        billImageUrl = uploadPayload.url;
-        billStoragePath = uploadPayload.storagePath;
+        const uploadResult = await uploadBillImage(billFile);
+        billImageUrl = uploadResult.url;
+        billStoragePath = uploadResult.storagePath;
       }
 
       const response = await fetch(endpoint, {
@@ -190,7 +169,9 @@ export function TransactionForm({
               setBillFile(file);
             }}
           />
-          <p className="text-xs text-muted-foreground">Image only, max size 1 MB.</p>
+          <p className="text-xs text-muted-foreground">
+            Image only, max size 6 MB. Files above 1 MB are compressed before upload.
+          </p>
           {billPreviewUrl && (
             <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/30 p-2">
               <div className="relative h-12 w-12">
@@ -215,7 +196,12 @@ export function TransactionForm({
                   <X className="size-3" />
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">{billSizeLabel}</p>
+              <p className="text-xs text-muted-foreground">
+                {billSizeLabel}
+                {billFile && billFile.size > BILL_UPLOAD_TARGET_BYTES
+                  ? ` -> compressed under ${formatBytes(BILL_UPLOAD_TARGET_BYTES)} on upload`
+                  : ""}
+              </p>
             </div>
           )}
         </div>

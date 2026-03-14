@@ -171,28 +171,30 @@ export function TransactionDetail({
               </button>
 
               {isPreviewOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
-                  <div className="absolute right-4 top-4 flex flex-col items-end gap-2 sm:right-6 sm:top-6">
-                    <button
-                      type="button"
-                      aria-label="Close preview"
-                      className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/90 text-black hover:bg-white"
-                      onClick={() => setIsPreviewOpen(false)}
-                    >
-                      <X className="size-4" />
-                    </button>
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md">
+                  <div className="fixed inset-x-0 top-0 z-10 flex justify-end gap-2 p-4 sm:p-6">
                     <a
                       href={tx.billImageUrl}
                       download
-                      className="inline-flex items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-xs font-medium text-black hover:bg-white"
+                      className="inline-flex h-[36px] items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-xs font-medium text-black shadow-sm hover:bg-white"
                     >
                       <Download className="size-3.5" />
                       Download
                     </a>
+                    <button
+                      type="button"
+                      aria-label="Close preview"
+                      className="inline-flex h-[36px] items-center justify-center rounded-md bg-white/90 px-3 text-black shadow-sm hover:bg-white"
+                      onClick={() => setIsPreviewOpen(false)}
+                    >
+                      <X className="size-4" />
+                    </button>
                   </div>
 
-                  <div className="relative mx-4 h-[88vh] w-full max-w-5xl">
-                    <Image src={tx.billImageUrl} alt="Bill image full preview" fill className="object-contain" />
+                  <div className="flex h-full items-center justify-center px-4 pb-4 pt-20 sm:px-6 sm:pb-6 sm:pt-24">
+                    <div className="relative h-full w-full max-w-5xl">
+                      <Image src={tx.billImageUrl} alt="Bill image full preview" fill className="object-contain" />
+                    </div>
                   </div>
                 </div>
               )}

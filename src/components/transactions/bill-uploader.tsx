@@ -5,6 +5,7 @@ import { Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { uploadBillImage } from "@/lib/bill-upload-client";
 
 export function BillUploader({
   transactionId,
@@ -21,30 +22,10 @@ export function BillUploader({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please choose an image file");
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      toast.error("Image size must be below 1 MB");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const uploadResponse = await fetch("/api/uploads/bill", {
-        method: "POST",
-        body: formData,
-      });
-      const uploadPayload = await uploadResponse.json();
-
-      if (!uploadResponse.ok) {
-        throw new Error(uploadPayload.error || "Failed to upload image");
-      }
+      const uploadPayload = await uploadBillImage(file);
 
       const patchResponse = await fetch(`/api/transactions/${transactionId}`, {
         method: "PATCH",
@@ -100,7 +81,7 @@ export function BillUploader({
   }
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="space-y-2">
       <input
         ref={inputRef}
         type="file"
@@ -111,24 +92,29 @@ export function BillUploader({
           if (file) void handleFile(file);
         }}
       />
-      <Button
-        disabled={loading}
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => inputRef.current?.click()}
-      >
-        {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />} Upload Bill
-      </Button>
-      <Button
-        disabled={loading || !hasImage}
-        type="button"
-        variant="destructive"
-        className="w-full sm:w-auto"
-        onClick={() => void handleRemove()}
-      >
-        {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Trash2 className="mr-2 size-4" />} Remove Bill
-      </Button>
+      <p className="text-xs text-muted-foreground">
+        Image only, max size 6 MB. Files above 1 MB are compressed before upload.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button
+          disabled={loading}
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => inputRef.current?.click()}
+        >
+          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />} Upload Bill
+        </Button>
+        <Button
+          disabled={loading || !hasImage}
+          type="button"
+          variant="destructive"
+          className="w-full sm:w-auto"
+          onClick={() => void handleRemove()}
+        >
+          {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Trash2 className="mr-2 size-4" />} Remove Bill
+        </Button>
+      </div>
     </div>
   );
 }

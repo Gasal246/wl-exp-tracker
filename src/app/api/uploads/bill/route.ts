@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { requireSession } from "@/lib/session";
+import { BILL_UPLOAD_MAX_BYTES } from "@/lib/bill-upload";
 import { firebaseBucket } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
@@ -20,8 +21,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "Only image uploads are allowed" }, { status: 400 });
   }
 
-  if (file.size > 1024 * 1024) {
-    return Response.json({ error: "Image size must be below 1 MB" }, { status: 400 });
+  if (file.size > BILL_UPLOAD_MAX_BYTES) {
+    return Response.json({ error: "Image size must be 6 MB or smaller" }, { status: 400 });
   }
 
   const bytes = await file.arrayBuffer();
