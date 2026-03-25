@@ -8,6 +8,22 @@ type BillUploadResponse = {
   error?: string;
 };
 
+async function readJsonResponse(response: Response): Promise<BillUploadResponse> {
+  const raw = await response.text();
+
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw) as BillUploadResponse;
+  } catch {
+    return {
+      error: `Request failed with status ${response.status}`,
+    };
+  }
+}
+
 function renameToJpeg(fileName: string) {
   return fileName.replace(/\.[^.]+$/, "") || "bill-image";
 }
@@ -117,10 +133,10 @@ export async function uploadBillImage(file: File) {
     method: "POST",
     body: formData,
   });
-  const uploadPayload = (await uploadResponse.json()) as BillUploadResponse;
+  const uploadPayload = await readJsonResponse(uploadResponse);
 
   if (!uploadResponse.ok || !uploadPayload.url || !uploadPayload.storagePath) {
-    throw new Error(uploadPayload.error || "Failed to upload bill image");
+    throw new Error(uploadPayload.error || `Failed to upload bill image (${uploadResponse.status})`);
   }
 
   return {

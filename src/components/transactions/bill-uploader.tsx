@@ -7,6 +7,26 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadBillImage } from "@/lib/bill-upload-client";
 
+type TransactionUpdateResponse = {
+  error?: string;
+};
+
+async function readJsonResponse(response: Response): Promise<TransactionUpdateResponse> {
+  const raw = await response.text();
+
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw) as TransactionUpdateResponse;
+  } catch {
+    return {
+      error: `Request failed with status ${response.status}`,
+    };
+  }
+}
+
 export function BillUploader({
   transactionId,
   hasImage,
@@ -35,7 +55,7 @@ export function BillUploader({
           billStoragePath: uploadPayload.storagePath,
         }),
       });
-      const patchPayload = await patchResponse.json();
+      const patchPayload = await readJsonResponse(patchResponse);
 
       if (!patchResponse.ok) {
         throw new Error(patchPayload.error || "Failed to attach image");
@@ -65,7 +85,7 @@ export function BillUploader({
           billStoragePath: null,
         }),
       });
-      const patchPayload = await patchResponse.json();
+      const patchPayload = await readJsonResponse(patchResponse);
 
       if (!patchResponse.ok) {
         throw new Error(patchPayload.error || "Failed to remove image");
@@ -100,7 +120,7 @@ export function BillUploader({
           disabled={loading}
           type="button"
           variant="outline"
-          className="w-full"
+          className="w-full sm:w-auto"
           onClick={() => inputRef.current?.click()}
         >
           {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />} Upload Bill
