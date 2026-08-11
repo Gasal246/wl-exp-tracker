@@ -6,6 +6,7 @@ import { firebaseBucket } from "@/lib/firebase-admin";
 import { createNotificationAndSendFcm } from "@/lib/notification";
 import { requireSession } from "@/lib/session";
 import { mapTransactionResponse } from "@/lib/transaction";
+import { Notification } from "@/models/Notification";
 import { Transaction } from "@/models/Transaction";
 import { User } from "@/models/User";
 
@@ -41,6 +42,46 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   }
 
   return Response.json({ transaction: mapTransactionResponse(tx) });
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const sessionResult = await requireSession(["ADMIN", "EMPLOYEE"]);
+  if (sessionResult.error) return sessionResult.error;
+
+  const { id } = await context.params;
+  if (!isValidObjectId(id)) {
+    return Response.json({ error: "Invalid transaction id" }, { status: 400 });
+  }
+
+  await connectToDatabase();
+
+  const filter: Record<string, unknown> = { _id: id };
+  if (sessionResult.session!.user.role === "ADMIN") {
+    filter.adminId = sessionResult.session!.user.id;
+  } else {
+    filter.employeeId = sessionResult.session!.user.id;
+  }
+
+  const tx = await Transaction.findOneAndDelete(filter).lean();
+  if (!tx) {
+    return Response.json({ error: "Transaction not found" }, { status: 404 });
+  }
+
+  try {
+    await Notification.deleteMany({ refType: "TRANSACTION", refId: tx._id });
+  } catch {
+    // The transaction is already deleted, so notification cleanup should not make the request fail.
+  }
+
+  if (tx.billStoragePath) {
+    try {
+      await firebaseBucket().file(tx.billStoragePath).delete({ ignoreNotFound: true });
+    } catch {
+      // The transaction is already deleted, so storage cleanup should not make the request fail.
+    }
+  }
+
+  return Response.json({ success: true });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
